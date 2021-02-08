@@ -20,13 +20,23 @@ cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_defa
 face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
 
 face_data = {}
-
+unknown_faces = {}
 check_in_record = {}
 
 detector = cv2.CascadeClassifier(cascPath)
 
 def export_check_in_to_csv():
     pass
+
+def to_grayscale(image):
+    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+def hash_image(image, hashSize = 8):
+    resized = cv2.resize(image, (hashSize+1, hashSize))
+
+    diff = resized[:, 1:] > resized[:, :-1]
+
+    return sum([2 ** i for (i,v) in enumerate(diff.flatten()) if v])
 
 def read_human_temperature():
     return 37.0
@@ -60,10 +70,10 @@ def check_in(name, human_temperature, check_in_time):
 
     
 
-def upload_user(current_frame, region, current_time):
-    user_uuid = uuid.uuid4()
+def upload_user(current_frame, image_id , region, current_time):
+    
     print('Saving region to file.')
-    cv2.imwrite(os.path.join(current_app_path, "test.png"), region)
+    cv2.imwrite(os.path.join(current_app_path, f"{image_id}.png"), region)
 
 def init_face_data():
     if os.path.exists(face_dataset):
@@ -124,19 +134,20 @@ def init_facial_recognition_feed():
                 try:
                     if name == "Unknown":
 
-                        #user_uuid = uuid.uuid4().hex
-                        #unknown_uuids.append(user_uuid)
-                        #unknown_face_encodings.append(encoding)
-
-                        #unknown_faces["uuids"] = unknown_uuids
-                        #unknown_faces["encodings"] = unknown_face_encodings
-
+                        print("unknown face")
                         # Get the first tuple (y, width, height, x ) in the list of boxes
-                        #ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
-
-                        #upload_user(current_frame=frame,region=ROI, current_time=current_time)
-                        #check_in(name, human_temperature=user_temperature)
-                        pass
+                        ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
+                        roi_to_hash = to_grayscale(frame)
+                        image_hash = hash_image(roi_to_hash)
+                        print(f"Image hash: {image_hash}")
+                        detected_image = unknown_faces.get(image_hash)
+                        if detected_image is None or not detected_image:
+                            print("Detected image is unique")
+                            image_uuid = uuid.uuid4().hex
+                            unknown_faces[image_hash] = (image_uuid, ROI)
+                            #upload_user(current_frame=frame,image_id = image_uuid,region=ROI, current_time=current_time)
+                        #check_in(user_uuid, human_temperature=user_temperature, check_in_time=current_time)
+                        
                     else:
                         check_in(name, human_temperature = user_temperature, check_in_time=current_time)
                 except:
