@@ -8,37 +8,79 @@ import time
 import os
 import sys
 from datetime import datetime
+from datetime import timedelta
+import uuid
+import requests
+import pdb
+from collections import Counter
 
-
+check_in_entry_datetime_format = "%d-%m-%y %H:%M:%S"
 current_app_path = os.path.abspath(os.path.dirname(__file__))
 cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_default.xml")
-face_dataset =  os.path.join(current_app_path,"../check-in/registered_faces.pickle")
+face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
 
-face_data = pickle.loads(open(face_dataset, "rb").read())
+face_data = {}
+
+check_in_record = {}
 
 detector = cv2.CascadeClassifier(cascPath)
 
+def export_check_in_to_csv():
+    pass
+
 def read_human_temperature():
-    pass
+    return 37.0
 
-def check_in(name, human_temperature):
-    current_time = datetime.now(tz=None)
+def check_in(name, human_temperature, check_in_time):
+
+    can_append_entry = False
+    formatted_date_time = check_in_time.strftime(check_in_entry_datetime_format)
+    formatted_date = check_in_time.strftime("%d-%m-%y")
     
-    pass
+    global check_in_record
 
+    records = check_in_record.get(formatted_date)
+    entry = (formatted_date_time, name, human_temperature)
+    
+    if records is None or not records:
+        records = []
+        can_append_entry = True
+        check_in_record[formatted_date] = records
+        
+    else:
+        for record in records:
+            check_time = datetime.strptime(record[0],check_in_entry_datetime_format)
+            if (name not in record) or (name in record and datetime.now(tz=None) - check_time >= timedelta(hours=4) and Counter(elem[1] for elem in records)[name] < 2):
+                can_append_entry = True
+                break
 
-def upload_user():
-    pass
+    if can_append_entry:
+        records.append(entry)
+        print(f"{name} checked in at {formatted_date_time}")
 
+    
+
+def upload_user(current_frame, region, current_time):
+    user_uuid = uuid.uuid4()
+    print('Saving region to file.')
+    cv2.imwrite(os.path.join(current_app_path, "test.png"), region)
+
+def init_face_data():
+    if os.path.exists(face_dataset):
+        global face_data
+        face_data = pickle.loads(open(face_dataset, "rb").read())
+    
 
 def init_facial_recognition_feed():
 
     print("[INFO] starting video stream...")
 
-    vs = VideoStream(src=2).start()
+    vs = VideoStream(src=0).start()
 
     time.sleep(2.0)
     fps = FPS().start()
+
+    global unknown_faces
 
     while True:
         
@@ -48,39 +90,57 @@ def init_facial_recognition_feed():
         gray2 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         rgb2 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        rects = detector.detectMultiScale(gray2, scaleFactor=1.2, minNeighbors=5, minSize=(30, 30))
+        rects = detector.detectMultiScale(gray2, scaleFactor=1.2, minNeighbors=5, minSize=(40, 40))
 
         boxes = [(y, x+w, y+h, x) for (x, y, w, h) in rects]    
         num_faces = len(boxes)
 
         if num_faces > 1:
             cv2.putText(frame, "Error: Multiple faces detected.", (40,40), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2 )
-        else:
+        elif num_faces == 1:
             live_encodings = face_recognition.face_encodings(rgb2, boxes)
 
             names = []
+            current_time = datetime.now(tz=None)
 
             for encoding in live_encodings:
-                matches = face_recognition.compare_faces(face_data["encoding"], encoding, tolerance=0.45)
+                
                 name = "Unknown"
 
-                if True in matches:
-                    matchedIdxs = [i for (i, b) in enumerate(matches) if b]
-                    counts = {}
+                if face_data:
+                    matches = face_recognition.compare_faces(face_data["encoding"], encoding, tolerance=0.4)
 
-                    for i in matchedIdxs:
-                        name = face_data["names"][i]
-                        counts[name] = counts.get(name, 0) + 1
-                    name = max(counts, key=counts.get)
+                    if True in matches:
+                        matchedIdxs = [i for (i, b) in enumerate(matches) if b]
+                        counts = {}
+
+                        for i in matchedIdxs:
+                            name = face_data["names"][i]
+                            counts[name] = counts.get(name, 0) + 1
+                        name = max(counts, key=counts.get)
 
                 user_temperature = read_human_temperature()
 
-                if name == "Unknown":
-                    upload_user()
-                    check_in(name, human_temperature=user_temperature)
+                try:
+                    if name == "Unknown":
+
+                        #user_uuid = uuid.uuid4().hex
+                        #unknown_uuids.append(user_uuid)
+                        #unknown_face_encodings.append(encoding)
+
+                        #unknown_faces["uuids"] = unknown_uuids
+                        #unknown_faces["encodings"] = unknown_face_encodings
+
+                        # Get the first tuple (y, width, height, x ) in the list of boxes
+                        #ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
+
+                        #upload_user(current_frame=frame,region=ROI, current_time=current_time)
+                        #check_in(name, human_temperature=user_temperature)
+                        pass
+                    else:
+                        check_in(name, human_temperature = user_temperature, check_in_time=current_time)
+                except:
                     pass
-                else:
-                    check_in(name, human_temperature = user_temperature)
 
                 names.append(name)
 
@@ -111,4 +171,5 @@ def init_facial_recognition_feed():
 
 
 if __name__ == '__main__':
+    init_face_data()
     init_facial_recognition_feed()
