@@ -13,11 +13,14 @@ import uuid
 import requests
 import pdb
 from collections import Counter
+import temp_reader
 
 check_in_entry_datetime_format = "%d-%m-%y %H:%M:%S"
 current_app_path = os.path.abspath(os.path.dirname(__file__))
 cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_default.xml")
 face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
+rgb_green = (0,255,0)
+rgb_red = (255,0,0)
 
 face_data = {}
 unknown_faces = {}
@@ -39,7 +42,7 @@ def hash_image(image, hashSize = 8):
     return sum([2 ** i for (i,v) in enumerate(diff.flatten()) if v])
 
 def read_human_temperature():
-    return 37.0
+    return temp_reader.read_temperature()
 
 def check_in(name, human_temperature, check_in_time):
 
@@ -105,6 +108,8 @@ def init_facial_recognition_feed():
         boxes = [(y, x+w, y+h, x) for (x, y, w, h) in rects]    
         num_faces = len(boxes)
 
+        user_temperature = 0.0
+
         if num_faces > 1:
             cv2.putText(frame, "Error: Multiple faces detected.", (40,40), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2 )
         elif num_faces == 1:
@@ -133,18 +138,16 @@ def init_facial_recognition_feed():
 
                 try:
                     if name == "Unknown":
-
-                        print("unknown face")
+                        pass
                         # Get the first tuple (y, width, height, x ) in the list of boxes
-                        ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
-                        roi_to_hash = to_grayscale(frame)
-                        image_hash = hash_image(roi_to_hash)
-                        print(f"Image hash: {image_hash}")
-                        detected_image = unknown_faces.get(image_hash)
-                        if detected_image is None or not detected_image:
-                            print("Detected image is unique")
-                            image_uuid = uuid.uuid4().hex
-                            unknown_faces[image_hash] = (image_uuid, ROI)
+                        #ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
+                        #roi_to_hash = to_grayscale(frame)
+                        #image_hash = hash_image(roi_to_hash)
+                        
+                        #detected_image = unknown_faces.get(image_hash)
+                        #if detected_image is None or not detected_image:
+                          #  image_uuid = uuid.uuid4().hex
+                          #  unknown_faces[image_hash] = (image_uuid, ROI)
                             #upload_user(current_frame=frame,image_id = image_uuid,region=ROI, current_time=current_time)
                         #check_in(user_uuid, human_temperature=user_temperature, check_in_time=current_time)
                         
@@ -155,12 +158,16 @@ def init_facial_recognition_feed():
 
                 names.append(name)
 
+            box_colour = rgb_green
+            if user_temperature >= 37.5:
+                box_colour = rgb_red
+                
             # loop over the recognized faces
             for ((top, right, bottom, left), name) in zip(boxes, names):
                 # draw the predicted face name on the image
-                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                cv2.rectangle(frame, (left, top), (right, bottom), box_colour, 2)
                 y = top - 15 if top - 15 > 15 else top + 15
-                cv2.putText(frame, name, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
+                cv2.putText(frame, name, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, box_colour, 2)
 
 
         # display the image to our screen
