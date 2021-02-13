@@ -35,6 +35,9 @@ check_in_record = {}
 
 detector = cv2.CascadeClassifier(cascPath)
 
+def get_record_file():
+    return f'{temperature_folder}/{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
+
 def read_human_temperature():
     if 'temp_reader' not in sys.modules:
         return 37.0
@@ -44,14 +47,37 @@ def create_record_file():
     if not os.path.exists(temperature_folder):
         os.makedirs(temperature_folder)
     
-    record_file = f'{temperature_folder}/{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
+    record_file = get_record_file()
     if not os.path.exists(record_file):
         with open(record_file, 'w') : pass
     
     return record_file
 
 def read_records(record_file):
-    pass
+    existing_records = {}
+
+    if not os.path.exists(record_file):
+        return existing_records
+    
+    with open(record_file, 'r') as csvfile:
+        recordReader = csv.reader(csvfile, delimiter=',')
+        for row in recordReader:
+            check_in_entry = []
+
+            try:
+                check_in_entry.append((row[1], row[2]))
+            except:
+                print("no record")
+                pass
+            try:
+                check_in_entry.append((row[3], row[4]))
+            except:
+                print("no record")
+                pass
+
+            existing_records[row[0]] = check_in_entry
+    return existing_records
+                
 
 def write_record(record_file, records):     
 
@@ -189,5 +215,7 @@ def init_facial_recognition_feed():
 
 
 if __name__ == '__main__':
+    
     init_face_data()
+    check_in_record = read_records(record_file = get_record_file())    
     init_facial_recognition_feed()
