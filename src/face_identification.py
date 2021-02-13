@@ -13,7 +13,10 @@ import uuid
 import requests
 import pdb
 from collections import Counter
-import temp_reader
+try:
+    import temp_reader
+except:
+    pass
 
 check_in_entry_datetime_format = "%d-%m-%y %H:%M:%S"
 current_app_path = os.path.abspath(os.path.dirname(__file__))
@@ -42,6 +45,8 @@ def hash_image(image, hashSize = 8):
     return sum([2 ** i for (i,v) in enumerate(diff.flatten()) if v])
 
 def read_human_temperature():
+    if 'temp_reader' not in sys.modules:
+        return 37.0
     return temp_reader.read_temperature()
 
 def check_in(name, human_temperature, check_in_time):
@@ -167,7 +172,7 @@ def init_facial_recognition_feed():
                 # draw the predicted face name on the image
                 cv2.rectangle(frame, (left, top), (right, bottom), box_colour, 2)
                 y = top - 15 if top - 15 > 15 else top + 15
-                cv2.putText(frame, name, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, box_colour, 2)
+                cv2.putText(frame, f'{name} (temp: {user_temperature})', (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, box_colour, 2)
 
 
         # display the image to our screen

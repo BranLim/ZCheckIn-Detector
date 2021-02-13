@@ -1,5 +1,5 @@
 import amg8833_i2c
-import time,sys
+import time
 #
 #####################################
 # Initialization of Sensor
@@ -21,11 +21,12 @@ time.sleep(0.1) # wait for sensor to settle
 # If no device is found, exit the script
 if sensor==[]:
     print("No AMG8833 Found - Check Your Wiring")
-    sys.exit(); # exit the app if AMG88xx is not found
+
 
 
 def read_temperature():
     global sensor
+
     pix_to_read = 64 # read all 64 pixels
     status,pixels = sensor.read_temp(pix_to_read) # read pixels with status
     #Magic number for correction. We probably need some trigometry to fix it
