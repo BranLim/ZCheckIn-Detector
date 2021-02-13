@@ -9,79 +9,87 @@ import os
 import sys
 from datetime import datetime
 from datetime import timedelta
-import uuid
-import requests
+#import uuid
+#import requests
 import pdb
+import csv
 from collections import Counter
 try:
     import temp_reader
 except:
     pass
 
-check_in_entry_datetime_format = "%d-%m-%y %H:%M:%S"
 current_app_path = os.path.abspath(os.path.dirname(__file__))
+
+check_in_entry_datetime_format = "%d-%m-%Y %H:%M:%S"
+
 cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_default.xml")
 face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
+temperature_folder = os.path.join(current_app_path,"../data/temperature")
+
 rgb_green = (0,255,0)
 rgb_red = (255,0,0)
 
 face_data = {}
-unknown_faces = {}
 check_in_record = {}
 
 detector = cv2.CascadeClassifier(cascPath)
-
-def export_check_in_to_csv():
-    pass
-
-def to_grayscale(image):
-    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-def hash_image(image, hashSize = 8):
-    resized = cv2.resize(image, (hashSize+1, hashSize))
-
-    diff = resized[:, 1:] > resized[:, :-1]
-
-    return sum([2 ** i for (i,v) in enumerate(diff.flatten()) if v])
 
 def read_human_temperature():
     if 'temp_reader' not in sys.modules:
         return 37.0
     return temp_reader.read_temperature()
 
+def create_record_file():
+    if not os.path.exists(temperature_folder):
+        os.makedirs(temperature_folder)
+    
+    record_file = f'{temperature_folder}/{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
+    if not os.path.exists(record_file):
+        with open(record_file, 'w') : pass
+    
+    return record_file
+
+def read_records(record_file):
+    pass
+
+def write_record(record_file, records):     
+
+    with open(record_file, 'w') as csvfile:
+       recordWriter = csv.writer(csvfile, delimiter=',')
+       for name, record in records.items():        
+            temperatures = [entry for row in record for entry in row]
+            csvRow = [name]
+            csvRow.extend(temperatures)                
+            recordWriter.writerow(csvRow)
+
+
 def check_in(name, human_temperature, check_in_time):
 
     can_append_entry = False
-    formatted_date_time = check_in_time.strftime(check_in_entry_datetime_format)
-    formatted_date = check_in_time.strftime("%d-%m-%y")
+   
+    record_file = create_record_file()    
     
     global check_in_record
+    user_entry = check_in_record.get(name)
 
-    records = check_in_record.get(formatted_date)
-    entry = (formatted_date_time, name, human_temperature)
+    formatted_date_time = check_in_time.strftime(check_in_entry_datetime_format)
+    entry = (formatted_date_time, human_temperature)
     
-    if records is None or not records:
-        records = []
-        can_append_entry = True
-        check_in_record[formatted_date] = records
+    if user_entry is None or not user_entry:
+        user_entry = []
+        check_in_record[name] = user_entry
+        can_append_entry = True       
         
-    else:
-        for record in records:
-            check_time = datetime.strptime(record[0],check_in_entry_datetime_format)
-            if (name not in record) or (name in record and datetime.now(tz=None) - check_time >= timedelta(hours=4) and Counter(elem[1] for elem in records)[name] < 2):
-                can_append_entry = True
-                break
+    elif len(user_entry) == 1:        
+        check_time = datetime.strptime(user_entry[0][0],check_in_entry_datetime_format)
+        if datetime.now(tz=None) - check_time >= timedelta(hours=4):
+            can_append_entry = True
 
     if can_append_entry:
-        records.append(entry)
+        user_entry.append(entry)
         print(f"{name} checked in at {formatted_date_time}")
-
-    
-
-def upload_user(current_frame, image_id , region, current_time):
-    
-    print('Saving region to file.')
-    cv2.imwrite(os.path.join(current_app_path, f"{image_id}.png"), region)
+        write_record(record_file, check_in_record)   
 
 def init_face_data():
     if os.path.exists(face_dataset):
@@ -93,12 +101,10 @@ def init_facial_recognition_feed():
 
     print("[INFO] starting video stream...")
 
-    vs = VideoStream(src=0).start()
+    vs = VideoStream(src=2).start()
 
     time.sleep(2.0)
     fps = FPS().start()
-
-    global unknown_faces
 
     while True:
         
@@ -144,18 +150,7 @@ def init_facial_recognition_feed():
                 try:
                     if name == "Unknown":
                         pass
-                        # Get the first tuple (y, width, height, x ) in the list of boxes
-                        #ROI = frame[boxes[0][0]:boxes[0][2],boxes[0][3]:boxes[0][1]]
-                        #roi_to_hash = to_grayscale(frame)
-                        #image_hash = hash_image(roi_to_hash)
-                        
-                        #detected_image = unknown_faces.get(image_hash)
-                        #if detected_image is None or not detected_image:
-                          #  image_uuid = uuid.uuid4().hex
-                          #  unknown_faces[image_hash] = (image_uuid, ROI)
-                            #upload_user(current_frame=frame,image_id = image_uuid,region=ROI, current_time=current_time)
-                        #check_in(user_uuid, human_temperature=user_temperature, check_in_time=current_time)
-                        
+                       
                     else:
                         check_in(name, human_temperature = user_temperature, check_in_time=current_time)
                 except:
