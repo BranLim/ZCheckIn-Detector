@@ -28,7 +28,7 @@ face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
 temperature_folder = os.path.join(current_app_path,"../data/temperature")
 
 rgb_green = (0,255,0)
-rgb_red = (255,0,0)
+rgb_red = (0,0,255)
 
 face_data = {}
 check_in_record = {}
@@ -193,7 +193,7 @@ def init_facial_recognition_feed():
                 # draw the predicted face name on the image
                 cv2.rectangle(frame, (left, top), (right, bottom), box_colour, 2)
                 y = top - 15 if top - 15 > 15 else top + 15
-                cv2.putText(frame, f'{name} (temp: {user_temperature})', (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.75, box_colour, 2)
+                cv2.putText(frame, f'{name} (temp: {user_temperature})', (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_colour, 2)
 
 
         # display the image to our screen
