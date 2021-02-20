@@ -1,0 +1,6 @@
+
+data/faces/
+
+*.pickle
+
+data/temperature/
