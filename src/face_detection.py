@@ -6,26 +6,63 @@ import cv2
 import os
 import sys
 
+current_app_path = os.path.abspath(os.path.dirname(__file__))
 
-imagesFolder = "faces"
+face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
+cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_default.xml")
+
+imagesFolder = os.path.join(current_app_path,"../data/faces/new")
+processedFolder = os.path.join(current_app_path, "../data/faces/processed")
+
 knownEncoding = []
 knownNames = []
 
-face_dataset = "registered_faces.pickle"
-cascPath = "haarcascade_frontalface_default.xml"
 # Create the haar cascade
 faceCascade = cv2.CascadeClassifier(cascPath)
 
 imagePaths = list(paths.list_images(imagesFolder))
 num_of_image = len(imagePaths)
 
-if num_of_image == 0:
-    print("nothing to process")
+def move_processed(source, destination):
+    os.rename(source, destination)
 
-elif num_of_image > 0:
+def save_dataset(data):
+    if data:
+        with open(face_dataset, 'wb') as f:
+            f.write(pickle.dumps(data))
+
+def load_existing_dataset(file):
+     if os.path.exists(file):
+        
+        face_data = pickle.loads(open(file, "rb").read())
+
+        if face_data:
+            encoding = face_data.get("encoding")
+            names = face_data.get("names")
+
+            global knownEncoding
+            global knownNames
+
+            if encoding:
+                knownEncoding.extend(encoding)
+            if names:
+                knownNames.extend(names)
+
+def init_processed_directory():
+    try:
+        if not os.path.exists(processedFolder):
+            os.makedirs()
+    except:
+        print("Error creating folder for processed images")
     
-    print(imagePaths)
 
+def process_images():
+    if num_of_image == 0:
+        print("nothing to process")
+        return None  
+
+    load_existing_dataset(face_dataset)    
+    print(imagePaths)
     for (i, imagePath) in enumerate(imagePaths):
 
         print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
@@ -37,7 +74,6 @@ elif num_of_image > 0:
 
         image = cv2.imread(imagePath)
         
-
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -67,10 +103,13 @@ elif num_of_image > 0:
             knownEncoding.append(encoding)
             knownNames.append(name)
 
-    print("[INFO] serialising encodings...")
     data = {"encoding": knownEncoding, "names": knownNames}
 
-    f = open(face_dataset, 'wb')
-    f.write(pickle.dumps(data))
-    f.close()
+    print("[INFO] serialising encodings...")        
+    save_dataset(data)   
     print("[INFO] serialising encodings done")
+
+
+if __name__ == '__main__':
+    init_processed_directory()
+    process_images()
