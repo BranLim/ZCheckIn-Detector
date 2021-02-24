@@ -4,3 +4,5 @@ data/faces/
 *.pickle
 
 data/temperature/
+
+data/registered_faces.pickle.bak
