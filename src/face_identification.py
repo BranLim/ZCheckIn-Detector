@@ -21,7 +21,6 @@ current_app_path = os.path.abspath(os.path.dirname(__file__))
 check_in_entry_datetime_format = "%d-%m-%Y %H:%M:%S"
 
 cascPath = os.path.join(current_app_path,"../models/haarcascade_frontalface_default.xml")
-face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
 temperature_folder = os.path.join(current_app_path,"../data/temperature")
 
 rgb_green = (0,255,0)
@@ -50,7 +49,7 @@ def create_record_file():
     
     return record_file
 
-def read_records(record_file):
+def init_checkin_records(record_file):
     existing_records = {}
 
     if not os.path.exists(record_file):
@@ -64,12 +63,12 @@ def read_records(record_file):
             try:
                 check_in_entry.append((row[1], row[2]))
             except:
-                print("no record")
+                print("missing first entry")
                 pass
             try:
                 check_in_entry.append((row[3], row[4]))
             except:
-                print("no record")
+                print("missing second entry")
                 pass
 
             existing_records[row[0]] = check_in_entry
@@ -90,7 +89,8 @@ def write_record(record_file, records):
 def check_in(name, human_temperature, check_in_time):
 
     can_append_entry = False
-   
+    
+		#creates a checkin record file if it does not exists
     record_file = create_record_file()    
     
     global check_in_record
@@ -112,7 +112,7 @@ def check_in(name, human_temperature, check_in_time):
     if can_append_entry:
         user_entry.append(entry)
         print(f"{name} checked in at {formatted_date_time}")
-        write_record(record_file, check_in_record)   
+        write_record(record_file=record_file, records=check_in_record)   
 
 
 def identify_face(original_frame, rgb_frame, gray_frame):
@@ -173,10 +173,10 @@ def identify_face(original_frame, rgb_frame, gray_frame):
             cv2.putText(original_frame, f'{name} (temp: {user_temperature})', (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_colour, 2)
 
 
-def init_face_data():
-    if os.path.exists(face_dataset):
+def init_face_data(face_name_data):
+    if os.path.exists(face_name_data):
         global face_data
-        face_data = pickle.loads(open(face_dataset, "rb").read())
+        face_data = pickle.loads(open(face_name_data, "rb").read())
     
 
 def init_facial_recognition_feed():
@@ -219,6 +219,8 @@ def init_facial_recognition_feed():
 
 if __name__ == '__main__':
     
-    init_face_data()
-    check_in_record = read_records(record_file = get_record_file())    
+	  face_dataset =  os.path.join(current_app_path,"../data/registered_faces.pickle")
+    init_face_data(face_name_data=face_dataset)
+		global check_in_record
+    check_in_record = init_checkin_records(record_file=get_record_file())    
     init_facial_recognition_feed()
