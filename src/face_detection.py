@@ -12,8 +12,6 @@ knownNames = []
 
 
 def move_processed_images(source_images, destination_folder_root):
-    if source_images is None:
-        return None
 
     if type(source_images) is list:
         for imagePath in source_images:
@@ -29,23 +27,23 @@ def move_processed_images(source_images, destination_folder_root):
                     os.mkdir(path=final_destination_folder)
             except:
                 pass
-
-            final_destination_path = os.path.join(
-                destination_folder_root, f'{name}/{fileName}')
-            print(f'Move Destination: {final_destination_path}')
-            shutil.move(src=imagePath, dst=final_destination_path)
-
-
-def save_dataset(data):
-    if data:
-        with open(face_dataset, 'wb') as f:
-            f.write(pickle.dumps(data))
+            else:
+                final_destination_path = os.path.join(
+                    final_destination_folder, fileName)
+                print(f'Move Destination: {final_destination_path}')
+                shutil.move(src=imagePath, dst=final_destination_path)
 
 
-def load_existing_dataset(file):
-    if os.path.exists(file):
+def save_registered_faces(face_name_mappings):
+    if face_name_mappings:
+        with open(registered_faces, 'wb') as f:
+            f.write(pickle.dumps(face_name_mappings))
 
-        face_data = pickle.loads(open(file, "rb").read())
+
+def load_registered_faces(face_name_mapping):
+    if os.path.exists(face_name_mapping):
+
+        face_data = pickle.loads(open(face_name_mapping, "rb").read())
 
         if face_data:
             encoding = face_data.get("encoding")
@@ -79,40 +77,41 @@ def register_faces(image_paths, classifier):
     global knownNames
 
     # Goes through the image paths.
-    for (i, imagePath) in enumerate(image_paths):
+    for (i, image_path) in enumerate(image_paths):
 
-        print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
+        print("[INFO] processing image {}/{}".format(i+1, len(image_paths)))
 
-        name = imagePath.split(os.path.sep)[-2]
+        # The foldername is the name of the face
+        name = image_path.split(os.path.sep)[-2]
 
-        print(f"Image: {imagePath}")
+        print(f"Image: {image_path}")
         print(f"Name: {name}")
 
-        image = cv2.imread(imagePath)
+        image = cv2.imread(image_path)
 
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        grayscale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
         # Detect faces in the image
-        faces = faceCascade.detectMultiScale(
-            gray, scaleFactor=1.4, minNeighbors=5, minSize=(30, 30))
+        detected_faces = faceCascade.detectMultiScale(
+            grayscale_image, scaleFactor=1.4, minNeighbors=5, minSize=(30, 30))
 
-        print("Found {0} faces!".format(len(faces)))
+        print("Found {0} faces!".format(len(detected_faces)))
 
-        if len(faces) > 1:
+        if len(detected_faces) > 1:
             # If an image is found to have multiple faces, we have to skip it. The images should be either selfies or profile pictures
             continue
 
-        processed_images.append(imagePath)
+        processed_images.append(image_path)
 
         faces_list = []
 
         # Draw a rectangle around the faces
-        for (x, y, w, h) in faces:
+        for (x, y, w, h) in detected_faces:
             #cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 2)
             faces_list.append([y, x+w, y+h, x])
 
-        encodings = face_recognition.face_encodings(rgb, faces_list)
+        encodings = face_recognition.face_encodings(rgb_image, faces_list)
         for encoding in encodings:
             knownEncoding.append(encoding)
             knownNames.append(name)
@@ -131,33 +130,35 @@ def process_images(image_classifier, images_dir, processed_images_directory):
 
     print("[INFO] processing images...")
     print(imagePaths)
-    processed_images = register_faces(image_paths=imagePaths, classifier=image_classifier)
+    processed_images = register_faces(
+        image_paths=imagePaths, classifier=image_classifier)
     move_processed_images(source_images=processed_images,
                           destination_folder_root=processed_images_directory)
 
     print("[INFO] images processed complete...")
-	
+
     global knownEncoding
     global knownNames
 
     data = {"encoding": knownEncoding, "names": knownNames}
 
     print("[INFO] serialising encodings...")
-    save_dataset(data)
+    save_registered_faces(face_name_mappings=data)
     print("[INFO] serialising encodings done")
 
 
 if __name__ == '__main__':
 
-    face_dataset = os.path.join(
+    registered_faces = os.path.join(
         current_app_path, "../data/registered_faces.pickle")
-    cascPath = os.path.join(
+    haar_cascade_model_file = os.path.join(
         current_app_path, "../models/haarcascade_frontalface_default.xml")
 
-    imagesFolder = os.path.join(current_app_path, "../data/faces/new")
-    processedFolder = os.path.join(current_app_path, "../data/faces/processed")
+    new_face_images_dir = os.path.join(current_app_path, "../data/faces/new")
+    processed_face_images_dir = os.path.join(
+        current_app_path, "../data/faces/processed")
 
-    init_processed_directory(processedFolder)
-    load_existing_dataset(face_dataset)
-    process_images(image_classifier=cascPath, images_dir=imagesFolder,
-                   processed_images_directory=processedFolder)
+    init_processed_directory(processed_face_images_dir)
+    load_registered_faces(face_name_mapping=registered_faces)
+    process_images(image_classifier=haar_cascade_model_file, images_dir=new_face_images_dir,
+                   processed_images_directory=processed_face_images_dir)

@@ -20,8 +20,7 @@ current_app_path = os.path.abspath(os.path.dirname(__file__))
 
 check_in_entry_datetime_format = "%d-%m-%Y %H:%M:%S"
 
-cascPath = os.path.join(
-    current_app_path, "../models/haarcascade_frontalface_default.xml")
+
 temperature_folder = os.path.join(current_app_path, "../data/temperature")
 
 rgb_green = (0, 255, 0)
@@ -30,10 +29,7 @@ rgb_red = (0, 0, 255)
 face_data = {}
 check_in_record = {}
 
-detector = cv2.CascadeClassifier(cascPath)
-
-
-def get_record_file():
+def get_checkin_record_filename():
     return f'{temperature_folder}/{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
 
 
@@ -47,9 +43,10 @@ def create_record_file():
     if not os.path.exists(temperature_folder):
         os.makedirs(temperature_folder)
 
-    record_file = get_record_file()
+    record_file = get_checkin_record_filename()
     if not os.path.exists(record_file):
-        with open(record_file, 'w'): pass
+        with open(record_file, 'w'):
+            pass
 
     return record_file
 
@@ -61,8 +58,8 @@ def init_checkin_records(record_file):
         return existing_records
 
     with open(record_file, 'r') as csvfile:
-        recordReader = csv.reader(csvfile, delimiter=',')
-        for row in recordReader:
+        record_reader = csv.reader(csvfile, delimiter=',')
+        for row in record_reader:
             check_in_entry = []
 
             try:
@@ -83,8 +80,8 @@ def init_checkin_records(record_file):
 def write_record(record_file, records):
 
     with open(record_file, 'w') as csvfile:
-       recordWriter = csv.writer(csvfile, delimiter=',')
-       for name, record in records.items():
+        recordWriter = csv.writer(csvfile, delimiter=',')
+        for name, record in records.items():
             temperatures = [entry for row in record for entry in row]
             csvRow = [name]
             csvRow.extend(temperatures)
@@ -95,7 +92,7 @@ def check_in(name, human_temperature, check_in_time):
 
     can_append_entry = False
 
-		# creates a checkin record file if it does not exists
+    # creates a checkin record file if it does not exists
     record_file = create_record_file()
 
     global check_in_record
@@ -122,13 +119,14 @@ def check_in(name, human_temperature, check_in_time):
         write_record(record_file=record_file, records=check_in_record)
 
 
-def identify_face(original_frame, rgb_frame, gray_frame):
+def identify_face(face_detector,original_frame, rgb_frame, gray_frame):
 
-    rects = detector.detectMultiScale(
+    
+    detected_faces = face_detector.detectMultiScale(
         gray_frame, scaleFactor=1.2, minNeighbors=5, minSize=(40, 40))
 
-    boxes = [(y, x+w, y+h, x) for (x, y, w, h) in rects]
-    num_faces = len(boxes)
+    detected_faces_boxes = [(y, x+w, y+h, x) for (x, y, w, h) in detected_faces]
+    num_faces = len(detected_faces)
 
     user_temperature = 0.0
 
@@ -136,7 +134,7 @@ def identify_face(original_frame, rgb_frame, gray_frame):
         cv2.putText(original_frame, "Error: Multiple faces detected.",
                     (40, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
     elif num_faces == 1:
-        live_encodings = face_recognition.face_encodings(rgb_frame, boxes)
+        live_encodings = face_recognition.face_encodings(rgb_frame, detected_faces_boxes)
 
         names = []
         current_time = datetime.now(tz=None)
@@ -177,7 +175,7 @@ def identify_face(original_frame, rgb_frame, gray_frame):
             box_colour = rgb_red
 
         # loop over the recognized faces
-        for ((top, right, bottom, left), name) in zip(boxes, names):
+        for ((top, right, bottom, left), name) in zip(detected_faces_boxes, names):
             # draw the predicted face name on the image
             cv2.rectangle(original_frame, (left, top),
                           (right, bottom), box_colour, 2)
@@ -186,16 +184,17 @@ def identify_face(original_frame, rgb_frame, gray_frame):
                 left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_colour, 2)
 
 
-def init_face_data(face_name_data):
+def load_registered_faces(face_name_data):
     if os.path.exists(face_name_data):
         global face_data
         face_data = pickle.loads(open(face_name_data, "rb").read())
 
 
-def init_facial_recognition_feed():
+def detect_and_process_faces(face_detection_model):
 
-    print("[INFO] starting video stream...")
+    detector = cv2.CascadeClassifier(face_detection_model)
 
+    print("[INFO] starting video stream...")    
     vs = VideoStream(src=2).start()
 
     time.sleep(2.0)
@@ -206,10 +205,10 @@ def init_facial_recognition_feed():
         frame = vs.read()
         frame = imutils.resize(frame, width=480)
 
-        gray2 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        rgb2 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        grayscale_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        identify_face(original_frame=frame, rgb_frame=rgb2, gray_frame=gray2)
+        identify_face(face_detector=detector,original_frame=frame, rgb_frame=rgb_frame, gray_frame=grayscale_frame)
 
         # display the image to our screen
         cv2.imshow("Frame", frame)
@@ -230,10 +229,12 @@ def init_facial_recognition_feed():
 
 
 if __name__ == '__main__':
-    
-    face_dataset = os.path.join(
-	    current_app_path, "../data/registered_faces.pickle")
-    init_face_data(face_name_data=face_dataset)
 
-    check_in_record = init_checkin_records(record_file=get_record_file())
-    init_facial_recognition_feed()
+    haar_face_classifier = os.path.join(
+    current_app_path, "../models/haarcascade_frontalface_default.xml")
+    face_name_mapping = os.path.join(
+        current_app_path, "../data/registered_faces.pickle")
+    load_registered_faces(face_name_data=face_name_mapping)
+
+    check_in_record = init_checkin_records(record_file=get_checkin_record_filename())
+    detect_and_process_faces(face_detection_model=haar_face_classifier)
