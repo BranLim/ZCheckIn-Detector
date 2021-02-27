@@ -60,15 +60,15 @@ def load_existing_dataset(file):
                 knownNames.extend(names)
 
 
-def init_processed_directory(processedImagesFolder):
+def init_processed_directory(processed_images_directory):
     try:
-        if not os.path.exists(processedImagesFolder):
-            os.makedirs(processedImagesFolder)
+        if not os.path.exists(processed_images_directory):
+            os.makedirs(processed_images_directory)
     except:
         print("Error creating folder for processed images")
 
 
-def register_faces(imagePaths, classifier):
+def register_faces(image_paths, classifier):
 
     processed_images = []
 
@@ -79,7 +79,7 @@ def register_faces(imagePaths, classifier):
     global knownNames
 
     # Goes through the image paths.
-    for (i, imagePath) in enumerate(imagePaths):
+    for (i, imagePath) in enumerate(image_paths):
 
         print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
 
@@ -120,21 +120,24 @@ def register_faces(imagePaths, classifier):
     return processed_images
 
 
-def process_images(imageClassifier, imagesFolder, processedImagesFolder):
+def process_images(image_classifier, images_dir, processed_images_directory):
 
-    imagePaths = list(paths.list_images(imagesFolder))
+    imagePaths = list(paths.list_images(images_dir))
     num_of_image = len(imagePaths)
 
     if num_of_image == 0:
         print("nothing to process")
         return None
 
+		print("[INFO] processing images...")
     print(imagePaths)
-    processed_images = register_faces(imagePaths, classifier=imageClassifier)
+    processed_images = register_faces(image_paths=imagePaths, classifier=image_classifier)
     move_processed_images(source_images=processed_images,
-                          destination_folder_root=processedImagesFolder)
+                          destination_folder_root=processed_images_directory)
 
-    global knownEncoding
+    print("[INFO] images processed complete...")
+		
+		global knownEncoding
     global knownNames
 
     data = {"encoding": knownEncoding, "names": knownNames}
@@ -156,5 +159,5 @@ if __name__ == '__main__':
 
     init_processed_directory(processedFolder)
     load_existing_dataset(face_dataset)
-    process_images(imageClassifier=cascPath, imagesFolder=imagesFolder,
-                   processedImagesFolder=processedFolder)
+    process_images(image_classifier=cascPath, images_dir=imagesFolder,
+                   processed_images_directory=processedFolder)
