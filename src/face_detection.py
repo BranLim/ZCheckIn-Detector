@@ -10,14 +10,19 @@ current_app_path = os.path.abspath(os.path.dirname(__file__))
 knownEncoding = []
 knownNames = []
 
-def move_processed_image(source_images, dst_folder_root):
-    if type(source_images) is list:        
-        for imagePath in source_images:            
+
+def move_processed_images(source_images, destination_folder_root):
+    if source_images is None:
+        return None
+
+    if type(source_images) is list:
+        for imagePath in source_images:
             print(f'Images to move: {imagePath}')
             name = imagePath.split(os.path.sep)[-2]
             fileName = imagePath.split(os.path.sep)[-1]
 
-            final_destination_folder = os.path.join(dst_folder_root, f'{name}')
+            final_destination_folder = os.path.join(
+                destination_folder_root, f'{name}')
 
             try:
                 if not os.path.exists(final_destination_folder):
@@ -25,11 +30,11 @@ def move_processed_image(source_images, dst_folder_root):
             except:
                 pass
 
-
-            final_destination_path = os.path.join(dst_folder_root, f'{name}/{fileName}')
+            final_destination_path = os.path.join(
+                destination_folder_root, f'{name}/{fileName}')
             print(f'Move Destination: {final_destination_path}')
             shutil.move(src=imagePath, dst=final_destination_path)
-                
+
 
 def save_dataset(data):
     if data:
@@ -70,13 +75,15 @@ def register_faces(imagePaths, classifier):
     # Create the haar cascade
     faceCascade = cv2.CascadeClassifier(classifier)
 
+    global knownEncoding
+    global knownNames
+
     # Goes through the image paths.
     for (i, imagePath) in enumerate(imagePaths):
 
         print("[INFO] processing image {}/{}".format(i+1, len(imagePaths)))
 
         name = imagePath.split(os.path.sep)[-2]
-        
 
         print(f"Image: {imagePath}")
         print(f"Name: {name}")
@@ -96,7 +103,7 @@ def register_faces(imagePaths, classifier):
             # If an image is found to have multiple faces, we have to skip it. The images should be either selfies or profile pictures
             continue
 
-        processed_images.append(imagePath)           
+        processed_images.append(imagePath)
 
         faces_list = []
 
@@ -124,7 +131,8 @@ def process_images(imageClassifier, imagesFolder, processedImagesFolder):
 
     print(imagePaths)
     processed_images = register_faces(imagePaths, classifier=imageClassifier)
-    move_processed_image(source_images=processed_images, dst_folder_root=processedImagesFolder)
+    move_processed_images(source_images=processed_images,
+                          destination_folder_root=processedImagesFolder)
 
     global knownEncoding
     global knownNames
