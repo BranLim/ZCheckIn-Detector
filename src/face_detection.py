@@ -129,15 +129,15 @@ def process_images(image_classifier, images_dir, processed_images_directory):
         print("nothing to process")
         return None
 
-		print("[INFO] processing images...")
+    print("[INFO] processing images...")
     print(imagePaths)
     processed_images = register_faces(image_paths=imagePaths, classifier=image_classifier)
     move_processed_images(source_images=processed_images,
                           destination_folder_root=processed_images_directory)
 
     print("[INFO] images processed complete...")
-		
-		global knownEncoding
+	
+    global knownEncoding
     global knownNames
 
     data = {"encoding": knownEncoding, "names": knownNames}
