@@ -222,6 +222,9 @@ def load_registered_faces(face_name_data):
         global face_data
         face_data = pickle.loads(open(face_name_data, "rb").read())
 
+def process_unknown_user():
+    pass
+
 
 def detect_faces_and_check_in(face_detection_model):
 
@@ -252,8 +255,7 @@ def detect_faces_and_check_in(face_detection_model):
 
             try:
                 if user_name == "Unknown":
-                    pass
-
+                    process_unknown_user()
                 else:
                     logger.info("Face recognised. To check in user.")
                     check_in(name=user_name, human_temperature=user_temperature,
