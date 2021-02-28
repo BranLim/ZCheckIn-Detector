@@ -8,3 +8,5 @@ data/temperature/
 data/registered_faces.pickle.bak
 
 src/__pycache__/
+
+logs/
