@@ -33,6 +33,8 @@ rgb_red = (0, 0, 255)
 face_data = {}
 check_in_record = {}
 
+unknown_user_count = 0
+
 
 class face_matchings:
 
@@ -194,7 +196,7 @@ def identify_face(face_detector, original_frame, rgb_frame, gray_frame):
 
     encoding = live_encodings[0]
     user_name = match_face(live_encoding=encoding, match_tolerance=0.4)
-    
+
     return (detected_faces_boxes, user_name)
 
 
@@ -222,7 +224,8 @@ def load_registered_faces(face_name_data):
         global face_data
         face_data = pickle.loads(open(face_name_data, "rb").read())
 
-def process_unknown_user():
+
+def process_unknown_user(current_frame, detected_face):
     pass
 
 
@@ -255,11 +258,22 @@ def detect_faces_and_check_in(face_detection_model):
 
             try:
                 if user_name == "Unknown":
-                    process_unknown_user()
-                else:
+
+                    global unknown_user_count
+                    unknown_user_count += 1
+
+                    if unknown_user_count >= 5:
+                        temp_user_name = process_unknown_user(current_frame = rgb_frame, detected_face=detected_face[0])
+                        check_in(name=temp_user_name, human_temperature=user_temperature, check_in_time=current_time)
+                        unknown_user_count = 0
+                    
+                else:                    
+                    global unknown_user_count
+                    unknown_user_count = 0
+
                     logger.info("Face recognised. To check in user.")
                     check_in(name=user_name, human_temperature=user_temperature,
-                            check_in_time=current_time)
+                             check_in_time=current_time)
                     logger.info("User completed checked in.")
             except:
                 logger.error("Error with user check-in")
