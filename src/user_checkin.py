@@ -14,6 +14,7 @@ import sys
 import constants
 # import pdb
 import logging
+import uuid
 from logging.handlers import TimedRotatingFileHandler
 import csv
 try:
@@ -143,6 +144,8 @@ def check_in(name, human_temperature, check_in_time):
         logger.info(
             f"{name} checked in at {formatted_date_time} with temperature {human_temperature} degrees Celsius")
         write_record(record_file=record_file, records=check_in_record)
+    
+    return can_append_entry
 
 
 def match_face(live_encoding, match_tolerance=0.4):
@@ -226,7 +229,22 @@ def load_registered_faces(face_name_data):
 
 
 def process_unknown_user(current_frame, detected_face):
-    pass
+    face_pending_folder = os.path.join(
+        current_app_path, "../data/faces/pending")
+
+    if not os.path.exists(face_pending_folder):
+        logger.info("Creating directory for unknown faces")
+        os.makedirs(face_pending_folder)
+
+    user_uuid = uuid.uuid4().hex
+    roi = current_frame[detected_face[0][0]:detected_face[0]
+                        [2], detected_face[0][3]:detected_face[0][1]]
+
+    unknown_face_image = os.path.join(face_pending_folder, f'{user_uuid}.png')
+    logger.info(f"Saving unknown face at {unknown_face_image}")
+    cv2.imwrite(unknown_face_image, roi)
+
+    return user_uuid
 
 
 def detect_faces_and_check_in(face_detection_model):
@@ -234,16 +252,20 @@ def detect_faces_and_check_in(face_detection_model):
     detector = cv2.CascadeClassifier(face_detection_model)
 
     logger.info("Starting video stream...")
-    vs = VideoStream(src=2).start()
+    vs = VideoStream(src=0).start()
 
     logger.info("Warming up camera")
     time.sleep(2.0)
     fps = FPS().start()
 
+    checked_in = False
+
+    checked_in_time = None
+
     while True:
 
         frame = vs.read()
-        frame = imutils.resize(frame, width=480)
+        frame = imutils.resize(frame, width=480, height=320)
 
         grayscale_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -251,38 +273,53 @@ def detect_faces_and_check_in(face_detection_model):
         detected_face = identify_face(
             face_detector=detector, original_frame=frame, rgb_frame=rgb_frame, gray_frame=grayscale_frame)
 
-        if detected_face is not None:
-            user_name = detected_face[1]
-            user_temperature = read_human_temperature()
-            current_time = datetime.now(tz=None)
+        if not checked_in:
+            if detected_face is not None:
+                user_name = detected_face[1]
+                user_temperature = read_human_temperature()
+                current_time = datetime.now(tz=None)
 
-            try:
-                if user_name == "Unknown":
+                global unknown_user_count
+                
+                try:
+                    if user_name == "Unknown":
 
-                    global unknown_user_count
-                    unknown_user_count += 1
+                        unknown_user_count += 1
 
-                    if unknown_user_count >= 5:
-                        temp_user_name = process_unknown_user(current_frame = rgb_frame, detected_face=detected_face[0])
-                        check_in(name=temp_user_name, human_temperature=user_temperature, check_in_time=current_time)
+                        if unknown_user_count == 5:
+                            temp_user_name = process_unknown_user(
+                                current_frame=frame, detected_face=detected_face[0])
+                            checked_in = check_in(
+                                name=temp_user_name, human_temperature=user_temperature, check_in_time=current_time)
+
+                    else:
                         unknown_user_count = 0
-                    
-                else:                    
-                    global unknown_user_count
-                    unknown_user_count = 0
 
-                    logger.info("Face recognised. To check in user.")
-                    check_in(name=user_name, human_temperature=user_temperature,
-                             check_in_time=current_time)
-                    logger.info("User completed checked in.")
-            except:
-                logger.error("Error with user check-in")
+                        logger.info("Face recognised. To check in user.")
+                        checked_in = check_in(name=user_name, human_temperature=user_temperature,
+                                check_in_time=current_time)
+                        logger.info("User completed checked in.")
 
-            show_detection(original_frame=frame, user_temperature=user_temperature, detected_faces=detected_face[0], detected_names=[
-                           detected_face[1]])
+                except:
+                    logger.error("Error with user check-in")
+                else:
+                    #checked_in = True
+                    checked_in_time = datetime.now(tz=None)
+                    show_detection(original_frame=frame, user_temperature=user_temperature, detected_faces=detected_face[0], detected_names=[
+                        detected_face[1]])
+
+        if checked_in:
+            if user_temperature >= 37.5:
+                cv2.putText(frame, "You shall not pass! You are too hot!",
+                            (60, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 255), 2)
+            else:
+                cv2.putText(frame, "Check-in success! You shall pass!",
+                            (60, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
+            if datetime.now(tz=None) - checked_in_time > timedelta(seconds=5):
+                checked_in = False
 
         # display the image to our screen
-        cv2.imshow("Frame", frame)
+        cv2.imshow("Video Feed", frame)
         key = cv2.waitKey(1) & 0xFF
         # if the `q` key was pressed, break from the loop
         if key == ord("q"):
