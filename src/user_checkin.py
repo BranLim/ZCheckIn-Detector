@@ -1,6 +1,5 @@
 #user_checkin.py
 
-from logging import handlers
 from imutils.video import VideoStream
 from imutils.video import FPS
 from datetime import datetime
@@ -130,10 +129,9 @@ def check_in(name, human_temperature, check_in_time):
 
 def identify_face(face_detector,original_frame, rgb_frame, gray_frame):
 
-    
     detected_faces = face_detector.detectMultiScale(
-        gray_frame, scaleFactor=1.2, minNeighbors=5, minSize=(40, 40))
-
+        image=gray_frame, scaleFactor=1.2, minNeighbors=5, minSize=(40, 40))
+   
     detected_faces_boxes = [(y, x+w, y+h, x) for (x, y, w, h) in detected_faces]
     num_faces = len(detected_faces)
 
@@ -219,7 +217,7 @@ def load_registered_faces(face_name_data):
 def detect_and_process_faces(face_detection_model):
 
     detector = cv2.CascadeClassifier(face_detection_model)
-
+    
     logger.info("Starting video stream...")    
     vs = VideoStream(src=2).start()
 
@@ -234,7 +232,7 @@ def detect_and_process_faces(face_detection_model):
 
         grayscale_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
+        
         detected_face_temperature = identify_face(face_detector=detector,original_frame=frame, rgb_frame=rgb_frame, gray_frame=grayscale_frame)
 
         if detected_face_temperature is not None:
