@@ -20,7 +20,6 @@ current_app_path = os.path.abspath(os.path.dirname(__file__))
 
 check_in_entry_datetime_format = "%d-%m-%Y %H:%M:%S"
 
-
 temperature_folder = os.path.join(current_app_path, "../data/temperature")
 
 rgb_green = (0, 255, 0)
@@ -169,19 +168,27 @@ def identify_face(face_detector,original_frame, rgb_frame, gray_frame):
                 pass
 
             names.append(name)
+        display_detection(original_frame=original_frame, user_temperature=user_temperature, detected_faces=detected_faces_boxes, detected_names=names)   
 
-        box_colour = rgb_green
-        if user_temperature >= 37.5:
-            box_colour = rgb_red
+     
 
-        # loop over the recognized faces
-        for ((top, right, bottom, left), name) in zip(detected_faces_boxes, names):
-            # draw the predicted face name on the image
-            cv2.rectangle(original_frame, (left, top),
-                          (right, bottom), box_colour, 2)
-            y = top - 15 if top - 15 > 15 else top + 15
-            cv2.putText(original_frame, f'{name} (temp: {user_temperature})', (
-                left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_colour, 2)
+def display_detection(original_frame,user_temperature, detected_faces, detected_names):
+
+    global rgb_green
+    global rgb_red
+
+    box_colour = rgb_green
+    if user_temperature >= 37.5:
+        box_colour = rgb_red
+
+    # loop over the recognized faces
+    for ((top, right, bottom, left), name) in zip(detected_faces, detected_names):
+        # draw the predicted face name on the image
+        cv2.rectangle(original_frame, (left, top),
+                        (right, bottom), box_colour, 2)
+        y = top - 15 if top - 15 > 15 else top + 15
+        cv2.putText(original_frame, f'{name} (temp: {user_temperature})', (
+            left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, box_colour, 2)
 
 
 def load_registered_faces(face_name_data):
