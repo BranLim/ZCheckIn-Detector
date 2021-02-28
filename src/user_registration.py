@@ -4,8 +4,13 @@ import pickle
 import cv2
 import os
 import shutil
+import logging
+from logging.handlers import TimedRotatingFileHandler
+import constants
 
 current_app_path = os.path.abspath(os.path.dirname(__file__))
+
+logger = logging.getLogger("User Registration")
 
 knownEncoding = []
 knownNames = []
@@ -34,7 +39,7 @@ def move_processed_images(source_images, destination_folder_root):
                 shutil.move(src=imagePath, dst=final_destination_path)
 
 
-def save_registered_faces(face_name_mappings):
+def save_registered_faces(registered_faces,face_name_mappings):
     if face_name_mappings:
         with open(registered_faces, 'wb') as f:
             f.write(pickle.dumps(face_name_mappings))
@@ -119,37 +124,64 @@ def register_faces(image_paths, classifier):
     return processed_images
 
 
-def process_images(image_classifier, images_dir, processed_images_directory):
+def process_images(image_classifier, images_dir, processed_images_directory, registered_faces_database):
 
     imagePaths = list(paths.list_images(images_dir))
     num_of_image = len(imagePaths)
 
     if num_of_image == 0:
-        print("nothing to process")
+        logger.info("No new faces to process")
         return None
 
-    print("[INFO] processing images...")
-    print(imagePaths)
+    logger.info("Processing images at: ")
+    logger.info(f"{imagePaths}")
+
     processed_images = register_faces(
         image_paths=imagePaths, classifier=image_classifier)
+
+    logger.info("Images processed.")
+
+    logger.info("Moving processed images...")
     move_processed_images(source_images=processed_images,
                           destination_folder_root=processed_images_directory)
 
-    print("[INFO] images processed complete...")
+    logger.info("Processed images moved.")
 
     global knownEncoding
     global knownNames
 
+    logger.info("Saving identified faces..")
     data = {"encoding": knownEncoding, "names": knownNames}
+    save_registered_faces(registered_faces=registered_faces_database,face_name_mappings=data)
+    logger.info("Identified faces saved.")
 
-    print("[INFO] serialising encodings...")
-    save_registered_faces(face_name_mappings=data)
-    print("[INFO] serialising encodings done")
+def setup_logging():
+    global logger
+
+    log_folder = os.path.join(current_app_path,f'../{constants.LOG_FOLDER}')
+    try:        
+        if not os.path.exists(log_folder):
+            os.mkdir(log_folder)
+    except:
+        print("[ERROR] Cannot create logging directory")
+    
+    log_file = os.path.join(log_folder, constants.USER_CHECKIN_LOG)
+
+    logging_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s","%Y-%m-%d %H:%M:%S")
+    logger.setLevel(logging.INFO)
+
+    time_rotating_log_file_handler = TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=5)
+    time_rotating_log_file_handler.setFormatter(logging_formatter)
+
+    logger.addHandler(time_rotating_log_file_handler)
+
 
 
 if __name__ == '__main__':
 
-    registered_faces = os.path.join(
+    setup_logging()
+
+    registered_faces_database = os.path.join(
         current_app_path, "../data/registered_faces.pickle")
     haar_cascade_model_file = os.path.join(
         current_app_path, "../models/haarcascade_frontalface_default.xml")
@@ -158,7 +190,17 @@ if __name__ == '__main__':
     processed_face_images_dir = os.path.join(
         current_app_path, "../data/faces/processed")
 
+    logger.info("App started.")
+
+    logger.info("Initialising directory for processed images.")
     init_processed_directory(processed_face_images_dir)
-    load_registered_faces(face_name_mapping=registered_faces)
+
+    logger.info("Loading registered faces.")
+    load_registered_faces(face_name_mapping=registered_faces_database)
+
+    logger.info("Processing new faces...")
     process_images(image_classifier=haar_cascade_model_file, images_dir=new_face_images_dir,
-                   processed_images_directory=processed_face_images_dir)
+                   processed_images_directory=processed_face_images_dir, registered_faces_database=registered_faces_database)
+    logger.info("Finished processing new faces.")
+
+    logger.info("App shutdown.")

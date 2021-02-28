@@ -1,3 +1,6 @@
+#user_checkin.py
+
+from logging import handlers
 from imutils.video import VideoStream
 from imutils.video import FPS
 from datetime import datetime
@@ -9,7 +12,10 @@ import cv2
 import time
 import os
 import sys
+import constants
 # import pdb
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import csv
 try:
     import temp_reader
@@ -18,7 +24,7 @@ except:
 
 current_app_path = os.path.abspath(os.path.dirname(__file__))
 
-check_in_entry_datetime_format = "%d-%m-%Y %H:%M:%S"
+logger = logging.getLogger("User Checkin")
 
 temperature_folder = os.path.join(current_app_path, "../data/temperature")
 
@@ -29,20 +35,24 @@ face_data = {}
 check_in_record = {}
 
 def get_checkin_record_filename():
-    return f'{temperature_folder}/{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
+    return f'{datetime.now(tz=None).strftime("%Y-%m-%d")}.csv'
 
 
 def read_human_temperature():
     if 'temp_reader' not in sys.modules:
+        logger.info("Thermal sensor is not ready.")
         return 0.0
     return temp_reader.read_temperature()
 
 
 def create_record_file():
+
+    global temperature_folder
+
     if not os.path.exists(temperature_folder):
         os.makedirs(temperature_folder)
-
-    record_file = get_checkin_record_filename()
+    
+    record_file = os.path.join(temperature_folder, get_checkin_record_filename())
     if not os.path.exists(record_file):
         with open(record_file, 'w'):
             pass
@@ -64,12 +74,10 @@ def init_checkin_records(record_file):
             try:
                 check_in_entry.append((row[1], row[2]))
             except:
-                print("missing first entry")
                 pass
             try:
                 check_in_entry.append((row[3], row[4]))
             except:
-                print("missing second entry")
                 pass
 
             existing_records[row[0]] = check_in_entry
@@ -77,7 +85,7 @@ def init_checkin_records(record_file):
 
 
 def write_record(record_file, records):
-
+    logger.info("Saving checkin record to file...")
     with open(record_file, 'w') as csvfile:
         recordWriter = csv.writer(csvfile, delimiter=',')
         for name, record in records.items():
@@ -85,6 +93,7 @@ def write_record(record_file, records):
             csvRow = [name]
             csvRow.extend(temperatures)
             recordWriter.writerow(csvRow)
+    logger.info("Checkin record saved.")
 
 
 def check_in(name, human_temperature, check_in_time):
@@ -98,7 +107,7 @@ def check_in(name, human_temperature, check_in_time):
     user_entry = check_in_record.get(name)
 
     formatted_date_time = check_in_time.strftime(
-        check_in_entry_datetime_format)
+        constants.CHECK_IN_DATETIME_FORMAT)
     entry = (formatted_date_time, human_temperature)
 
     if user_entry is None or not user_entry:
@@ -108,13 +117,14 @@ def check_in(name, human_temperature, check_in_time):
 
     elif len(user_entry) == 1:
         check_time = datetime.strptime(
-            user_entry[0][0], check_in_entry_datetime_format)
+            user_entry[0][0], constants.CHECK_IN_DATETIME_FORMAT)
         if datetime.now(tz=None) - check_time >= timedelta(hours=4):
+            logger.info("User have checked in before. Updating existing record...")
             can_append_entry = True
 
     if can_append_entry:
         user_entry.append(entry)
-        print(f"{name} checked in at {formatted_date_time}")
+        logger.info(f"{name} checked in at {formatted_date_time} with temperature {human_temperature} degrees Celsius")
         write_record(record_file=record_file, records=check_in_record)
 
 
@@ -130,49 +140,58 @@ def identify_face(face_detector,original_frame, rgb_frame, gray_frame):
     user_temperature = 0.0
 
     if num_faces > 1:
+        logger.warn("Detected multiple faces. Ignoring...")
         cv2.putText(original_frame, "Error: Multiple faces detected.",
                     (40, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 0), 2)
-    elif num_faces == 1:
-        live_encodings = face_recognition.face_encodings(rgb_frame, detected_faces_boxes)
+        return None
+    elif num_faces == 0:
+        return None
+    
+    logger.info("Detected one face. Processing...")
+    live_encodings = face_recognition.face_encodings(rgb_frame, detected_faces_boxes)
 
-        names = []
-        current_time = datetime.now(tz=None)
+    current_time = datetime.now(tz=None)
+    logger.info(f"Found {len(live_encodings)} encodings")
 
-        for encoding in live_encodings:
+    '''
+    Although most solutions will iterate through the live_encodings. But in our case, there should only be one encoding. So we will take the first one.
+    '''
 
-            name = "Unknown"
+    encoding = live_encodings[0]
 
-            if face_data:
-                matches = face_recognition.compare_faces(
-                    face_data["encoding"], encoding, tolerance=0.4)
+    user_name = "Unknown"
 
-                if True in matches:
-                    matchedIdxs = [i for (i, b) in enumerate(matches) if b]
-                    counts = {}
+    if face_data:
+        matches = face_recognition.compare_faces(
+            face_data["encoding"], encoding, tolerance=0.4)
 
-                    for i in matchedIdxs:
-                        name = face_data["names"][i]
-                        counts[name] = counts.get(name, 0) + 1
-                    name = max(counts, key=counts.get)
+        if True in matches:
+            matchedIdxs = [i for (i, b) in enumerate(matches) if b]
+            counts = {}
 
-            user_temperature = read_human_temperature()
+            for i in matchedIdxs:
+                user_name = face_data["names"][i]
+                counts[user_name] = counts.get(user_name, 0) + 1
+            user_name = max(counts, key=counts.get)
 
-            try:
-                if name == "Unknown":
-                    pass
+    user_temperature = read_human_temperature()
 
-                else:
-                    check_in(name, human_temperature=user_temperature,
-                             check_in_time=current_time)
-            except:
-                pass
+    try:
+        if user_name == "Unknown":
+            pass
 
-            names.append(name)
-        display_detection(original_frame=original_frame, user_temperature=user_temperature, detected_faces=detected_faces_boxes, detected_names=names)   
+        else:
+            logger.info("Face recognised. To check in user.")
+            check_in(name=user_name, human_temperature=user_temperature,
+                        check_in_time=current_time)
+            logger.info("User completed checked in.")
+    except:
+        pass
 
-     
+    return (detected_faces_boxes, user_name, user_temperature)
+        
 
-def display_detection(original_frame,user_temperature, detected_faces, detected_names):
+def show_detection(original_frame,user_temperature, detected_faces, detected_names):
 
     global rgb_green
     global rgb_red
@@ -201,9 +220,10 @@ def detect_and_process_faces(face_detection_model):
 
     detector = cv2.CascadeClassifier(face_detection_model)
 
-    print("[INFO] starting video stream...")    
+    logger.info("Starting video stream...")    
     vs = VideoStream(src=2).start()
 
+    logger.info("Warming up camera")
     time.sleep(2.0)
     fps = FPS().start()
 
@@ -215,7 +235,10 @@ def detect_and_process_faces(face_detection_model):
         grayscale_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        identify_face(face_detector=detector,original_frame=frame, rgb_frame=rgb_frame, gray_frame=grayscale_frame)
+        detected_face_temperature = identify_face(face_detector=detector,original_frame=frame, rgb_frame=rgb_frame, gray_frame=grayscale_frame)
+
+        if detected_face_temperature is not None:
+            show_detection(original_frame=frame, user_temperature=detected_face_temperature[2], detected_faces=detected_face_temperature[0], detected_names=[detected_face_temperature[1]])   
 
         # display the image to our screen
         cv2.imshow("Frame", frame)
@@ -228,20 +251,56 @@ def detect_and_process_faces(face_detection_model):
 
     # stop the timer and display FPS information
     fps.stop()
-    print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
-    print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
+    logger.info("Elapsed time: {:.2f}".format(fps.elapsed()))
+    logger.info("Approx. FPS: {:.2f}".format(fps.fps()))
+
+    logger.info("Stopping video stream and closing window")
     # do a bit of cleanup
     cv2.destroyAllWindows()
     vs.stop()
 
 
+def setup_logging():
+    global logger
+
+    log_folder = os.path.join(current_app_path,f'../{constants.LOG_FOLDER}')
+    try:        
+        if not os.path.exists(log_folder):
+            os.mkdir(log_folder)
+    except:
+        print("[ERROR] Cannot create logging directory")
+    
+    log_file = os.path.join(log_folder, constants.USER_CHECKIN_LOG)
+
+    logging_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s","%Y-%m-%d %H:%M:%S")
+    logger.setLevel(logging.INFO)
+
+    time_rotating_log_file_handler = TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=5)
+    time_rotating_log_file_handler.setFormatter(logging_formatter)
+
+    logger.addHandler(time_rotating_log_file_handler)
+
+
 if __name__ == '__main__':
+
+    setup_logging()
 
     haar_face_classifier = os.path.join(
     current_app_path, "../models/haarcascade_frontalface_default.xml")
     face_name_mapping = os.path.join(
         current_app_path, "../data/registered_faces.pickle")
-    load_registered_faces(face_name_data=face_name_mapping)
 
+    logger.info("App started.")
+
+    logger.info("Loading registered faces...")
+    load_registered_faces(face_name_data=face_name_mapping)
+    logger.info("Loaded registered faces.")
+
+    logger.info("Initialising checkin database.")
     check_in_record = init_checkin_records(record_file=get_checkin_record_filename())
+    logger.info("Checkin database ready.")
+
+    logger.info("Start facial recognition...")
     detect_and_process_faces(face_detection_model=haar_face_classifier)
+
+    logger.info("App shutdown")
