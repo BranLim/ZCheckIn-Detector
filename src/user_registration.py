@@ -165,7 +165,7 @@ def setup_logging():
     except:
         print("[ERROR] Cannot create logging directory")
     
-    log_file = os.path.join(log_folder, constants.USER_CHECKIN_LOG)
+    log_file = os.path.join(log_folder, constants.USER_REGISTRATION_LOG)
 
     logging_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s","%Y-%m-%d %H:%M:%S")
     logger.setLevel(logging.INFO)
