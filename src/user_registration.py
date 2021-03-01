@@ -7,6 +7,7 @@ import shutil
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import constants
+import face_registration
 
 current_app_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -37,12 +38,6 @@ def move_processed_images(source_images, destination_folder_root):
                     final_destination_folder, fileName)
                 print(f'Move Destination: {final_destination_path}')
                 shutil.move(src=imagePath, dst=final_destination_path)
-
-
-def save_registered_faces(registered_faces,face_name_mappings):
-    if face_name_mappings:
-        with open(registered_faces, 'wb') as f:
-            f.write(pickle.dumps(face_name_mappings))
 
 
 def load_registered_faces(face_name_mapping):
@@ -152,29 +147,34 @@ def process_images(image_classifier, images_dir, processed_images_directory, reg
 
     logger.info("Saving identified faces..")
     data = {"encoding": knownEncoding, "names": knownNames}
-    save_registered_faces(registered_faces=registered_faces_database,face_name_mappings=data)
+
+    face_registration.save_registered_faces(
+        face_data_path=registered_faces_database, face_name_mappings=data)
+
     logger.info("Identified faces saved.")
+
 
 def setup_logging():
     global logger
 
-    log_folder = os.path.join(current_app_path,f'../{constants.LOG_FOLDER}')
-    try:        
+    log_folder = os.path.join(current_app_path, f'../{constants.LOG_FOLDER}')
+    try:
         if not os.path.exists(log_folder):
             os.mkdir(log_folder)
     except:
         print("[ERROR] Cannot create logging directory")
-    
+
     log_file = os.path.join(log_folder, constants.USER_REGISTRATION_LOG)
 
-    logging_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s","%Y-%m-%d %H:%M:%S")
+    logging_formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
     logger.setLevel(logging.INFO)
 
-    time_rotating_log_file_handler = TimedRotatingFileHandler(log_file, when="d", interval=1, backupCount=5)
+    time_rotating_log_file_handler = TimedRotatingFileHandler(
+        log_file, when="d", interval=1, backupCount=5)
     time_rotating_log_file_handler.setFormatter(logging_formatter)
 
     logger.addHandler(time_rotating_log_file_handler)
-
 
 
 if __name__ == '__main__':

@@ -16,6 +16,7 @@ import constants
 import logging
 import uuid
 from logging.handlers import TimedRotatingFileHandler
+import face_registration
 import csv
 try:
     import temp_reader
@@ -240,9 +241,21 @@ def process_unknown_user(current_frame, detected_face):
     roi = current_frame[detected_face[0][0]:detected_face[0]
                         [2], detected_face[0][3]:detected_face[0][1]]
 
-    unknown_face_image = os.path.join(face_pending_folder, f'{user_uuid}.png')
+    named_face_folder = os.path.join(face_pending_folder, f'{user_uuid}')
+    if not os.path.exists(named_face_folder):
+        os.mkdir(named_face_folder)
+    
+    unknown_face_image = os.path.join(named_face_folder, '001.png')
     logger.info(f"Saving unknown face at {unknown_face_image}")
     cv2.imwrite(unknown_face_image, roi)
+
+    global face_data
+
+    logger.info("Encoding unknown face")
+    face_data = face_registration.register_face(image_path=unknown_face_image, detected_faces=detected_face, face_name_mapping=face_data)
+    logger.info("Saving unknown face encoding")
+    face_registration.save_registered_faces(face_data_path=get_registered_faces_data_path(), face_name_mappings=face_data)
+    
 
     return user_uuid
 
@@ -252,7 +265,7 @@ def detect_faces_and_check_in(face_detection_model):
     detector = cv2.CascadeClassifier(face_detection_model)
 
     logger.info("Starting video stream...")
-    vs = VideoStream(src=0).start()
+    vs = VideoStream(src=2).start()
 
     logger.info("Warming up camera")
     time.sleep(2.0)
@@ -361,14 +374,18 @@ def setup_logging():
     logger.addHandler(time_rotating_log_file_handler)
 
 
+def get_registered_faces_data_path():
+    return os.path.join(current_app_path, "../data/registered_faces.pickle")
+
+
 if __name__ == '__main__':
 
     setup_logging()
 
     haar_face_classifier = os.path.join(
         current_app_path, "../models/haarcascade_frontalface_default.xml")
-    face_name_mapping = os.path.join(
-        current_app_path, "../data/registered_faces.pickle")
+
+    face_name_mapping = get_registered_faces_data_path()
 
     logger.info("App started.")
 
