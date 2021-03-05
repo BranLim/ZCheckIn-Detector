@@ -22,7 +22,7 @@ time.sleep(0.1) # wait for sensor to settle
 if sensor==[]:
     print("No AMG8833 Found - Check Your Wiring")
 
-
+sensor.set_sample_rate(0x01)
 
 def read_temperature():
     global sensor
@@ -30,7 +30,7 @@ def read_temperature():
     pix_to_read = 64 # read all 64 pixels
     status,pixels = sensor.read_temp(pix_to_read) # read pixels with status
     #Magic number for correction. We probably need some trigometry to fix it
-    return max(pixels) + 2.0
+    return max(pixels) + 5.4
         
     
 
